@@ -1,6 +1,7 @@
 # PBML
 
 ## Build
+clone the repository and inside the repository directory run the following commands.
 
 ```
 mkdir build

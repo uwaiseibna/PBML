@@ -3,8 +3,9 @@
 ## Build
 clone the repository and inside the repository directory run the following commands.
 ```
+#requires CMake installed
+#Once CMake is installed run:
 
-#requires cmake installed
 mkdir build
 cd build
 cmake ..

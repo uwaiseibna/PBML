@@ -3,14 +3,14 @@
 ## Build
 clone the repository and inside the repository directory run the following commands.
 ```
-#requires CMake installed
-#Once CMake is installed run:
+#Requires CMake installed, once CMake is installed run:
 
 mkdir build
 cd build
 cmake ..
 make -j
 ```
+The binary will be stored in the build directory named `pbml`.
 
 
 ## Usage

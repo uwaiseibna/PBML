@@ -1,4 +1,5 @@
 # PBML
+PBML is adaptation of BML (Boyer-Moore-Li) trick into indexing and querying of PBWT (Positional Burrows--Wheeler Transform). Boyer-Moore string search algorithm and Heng Li's forward backward was combined into one algorihm named BML by T. Gagie. PBML adapts BML into the PBWT framework and performs and contiguous memory allocation trick. PBML builds two PBWTs one in the forward direction another in the reverse direction to perform LCP and LCS and a run-based haplotype-retrieval and can report SMEMs (Set Maximal Exact Match) of configurable minimum length given a panel and a set of queries (.bcf) format,it used SDSL libraries for storing the PBWT.
 
 ## Build
 clone the repository and inside the repository directory run the following commands.

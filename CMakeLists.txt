@@ -4,7 +4,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 find_package(OpenMP REQUIRED)
 
-# Add OpenMP compile flags (THIS WAS MISSING!)
+# Add compile flags
 add_compile_options(-Wall -Wextra -O3 -DNDEBUG -march=native ${OpenMP_CXX_FLAGS})
 
 # Configure thirdparty dependencies
@@ -26,7 +26,7 @@ target_link_libraries(pbml
     curl
     pthread
     m
-    OpenMP::OpenMP_CXX  # Better way to link OpenMP
+    OpenMP::OpenMP_CXX  
 )
 
 # Installation

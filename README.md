@@ -19,3 +19,9 @@ OMP_NUM_THREADS=1 ./build/pbml <dir/.../panel.bcf> <dir/.../query.bcf> <minimum_
 OMP_NUM_THREADS=n ./build/pbml <dir/.../panel.bcf> <dir/.../query.bcf> <minimum_SMEM_length> <output_name>
 
 ```
+
+## Output format
+```
+#Each line reports a SMEM with following tab seperated information:
+<haplotype> <starting column> <ending column> <length>
+```

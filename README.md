@@ -2,7 +2,7 @@
 
 ## Build
 clone the repository and inside the repository directory run the following commands.
-
+#requires cmake installed
 ```
 mkdir build
 cd build

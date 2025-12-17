@@ -29,3 +29,15 @@ OMP_NUM_THREADS=n ./build/pbml <dir/.../panel.bcf> <dir/.../query.bcf> <minimum_
 #Each line reports a SMEM with following tab seperated information:
 <haplotype> <starting column> <ending column> <length>
 ```
+
+## Citation
+```
+@article{islam2025scalable,
+  title={Scalable PBWT Queries with Minimum-Length SMEM Constraints},
+  author={Islam, Uwaise Ibna and Cozzi, Davide and Gagie, Travis and Varki, Rahul and Colonna, Vincenza and Garrison, Erik and Bonizzoni, Paola and Boucher, Christina},
+  journal={bioRxiv},
+  pages={2025--12},
+  year={2025},
+  publisher={Cold Spring Harbor Laboratory}
+}
+```

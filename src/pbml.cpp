@@ -19,6 +19,7 @@
 class PBWTColumn
 {
 public:
+    // sdsl sd vector for each pbwt column.
     struct CompressedColumn
     {
         sdsl::sd_vector<> bv;
@@ -41,6 +42,7 @@ public:
         ~CompressedColumn() = default;
     };
 
+    // return from LCP function: length of longest common prefix, interval, column of reported interval, haplotype that ends the interval
     struct BMLreturn
     {
         unsigned int lce;
@@ -48,24 +50,30 @@ public:
         int interval_col;
         uint16_t interval_end_hap;
     };
-    
+
+    // φ hint for each successor
     struct PhiInfo
     {
         uint16_t hap;
         uint32_t idx;
     };
-    
+    // successor data strucutre for each haplotype to complete the φ operation
     struct SuccessorInfo
     {
-        uint32_t* sites;
-        uint16_t* predecessors;
-        uint32_t* pred_hints;
+        uint32_t *sites;
+        uint16_t *predecessors;
+        uint32_t *pred_hints;
         size_t count;
-        
-        SuccessorInfo() : sites(nullptr), predecessors(nullptr), pred_hints(nullptr), count(0) {}
+        size_t capacity;
+
+        SuccessorInfo() : sites(nullptr), predecessors(nullptr), pred_hints(nullptr), count(0), capacity(0) {}
     };
 
 private:
+    /*
+    all required data structures, forward and reverse PBWTs, zero_counts for each column,
+    sites_count, haplotypes_count, queries, panel matrix, run_sampled info, successor data structures
+    */
     std::unique_ptr<CompressedColumn[]> forward_pbwt;
     std::unique_ptr<CompressedColumn[]> reverse_pbwt;
     std::unique_ptr<uint16_t[]> zero_counts;
@@ -78,29 +86,20 @@ private:
     std::unique_ptr<PhiInfo[]> run_phi_info;
     std::unique_ptr<uint16_t[]> end_prefs;
     std::unique_ptr<uint32_t[]> col_run_index;
-    SuccessorInfo* hap_successor;
-    uint32_t* hap_successor_sites;
-    uint16_t* hap_successor_preds;
-    uint32_t* hap_successor_hints;
+    SuccessorInfo *hap_successor;
+    uint32_t *hap_successor_sites;
+    uint16_t *hap_successor_preds;
+    uint32_t *hap_successor_hints;
     size_t run_capacity;
     size_t run_count;
-    size_t max_successor_count;
-    
-    static unsigned compute_bits(size_t n)
-    {
-        unsigned b = 1;
-        while ((1ULL << b) < n)
-            ++b;
-        return b;
-    }
 
 public:
+    // default class: builds PBWTs, queries and writes SMEMs to a file
     PBWTColumn(const std::string &panel_file, const std::string &query_file,
                const int L, const std::string &output_file)
-        : n_sites(0), n_haplotypes(0), hap_successor(nullptr), 
-          hap_successor_sites(nullptr), hap_successor_preds(nullptr), 
-          hap_successor_hints(nullptr), run_capacity(0), run_count(0),
-          max_successor_count(0)
+        : n_sites(0), n_haplotypes(0), hap_successor(nullptr),
+          hap_successor_sites(nullptr), hap_successor_preds(nullptr),
+          hap_successor_hints(nullptr), run_capacity(0), run_count(0)
     {
         if (L <= 0)
             throw std::invalid_argument("L must be positive");
@@ -126,7 +125,7 @@ public:
         std::cout << "Queried in " << query_time.count() / 1000.0 << "s\n";
         std::cout << "Total time: " << total_time.count() / 1000.0 << "s\n";
     }
-    
+    // destructor for successor data-structures
     ~PBWTColumn()
     {
         if (hap_successor)
@@ -143,69 +142,126 @@ private:
     void buildPBWTs(const std::string &filename)
     {
         readAndStoreAllColumns(filename);
+
+        // resize based on PBWT variables sites.
         forward_pbwt = std::make_unique<CompressedColumn[]>(n_sites);
         reverse_pbwt = std::make_unique<CompressedColumn[]>(n_sites);
         zero_counts = std::make_unique<uint16_t[]>(n_sites);
         end_prefs = std::make_unique<uint16_t[]>(n_sites);
-        
         col_run_index = std::make_unique<uint32_t[]>(n_sites + 2);
-        
-        run_capacity = n_sites * 4 ;
-        run_begin_positions = std::make_unique<uint16_t[]>(run_capacity);
-        run_beg_prefs = std::make_unique<uint16_t[]>(run_capacity);
-        run_phi_info = std::make_unique<PhiInfo[]>(run_capacity);
-        
+
+        // build both PBWTs
         buildForwardPBWT();
         buildReversePBWT();
+
+        // free the original panel matrix
         all_columns.clear();
         all_columns.shrink_to_fit();
     }
-    
-    void resize_runs_if_needed()
-    {
-        if (run_count >= run_capacity)
-        {
-            size_t new_capacity = run_capacity * 2;
-            auto new_begin = std::make_unique<uint16_t[]>(new_capacity);
-            auto new_beg_prefs = std::make_unique<uint16_t[]>(new_capacity);
-            auto new_phi_info = std::make_unique<PhiInfo[]>(new_capacity);
-            
-            std::copy(run_begin_positions.get(), run_begin_positions.get() + run_count, new_begin.get());
-            std::copy(run_beg_prefs.get(), run_beg_prefs.get() + run_count, new_beg_prefs.get());
-            std::copy(run_phi_info.get(), run_phi_info.get() + run_count, new_phi_info.get());
-            
-            run_begin_positions = std::move(new_begin);
-            run_beg_prefs = std::move(new_beg_prefs);
-            run_phi_info = std::move(new_phi_info);
-            run_capacity = new_capacity;
-        }
-    }
 
+    //build the forward PBWT, all the successor and run-sampled and hint strucutres.
     void buildForwardPBWT()
     {
-        hap_successor = new SuccessorInfo[n_haplotypes];
-        hap_successor_sites = new uint32_t[n_haplotypes * n_sites];
-        hap_successor_preds = new uint16_t[n_haplotypes * n_sites];
-        hap_successor_hints = new uint32_t[n_haplotypes * n_sites];
-        
-        for (size_t i = 0; i < n_haplotypes; ++i)
-        {
-            hap_successor[i].sites = hap_successor_sites + (i * n_sites);
-            hap_successor[i].predecessors = hap_successor_preds + (i * n_sites);
-            hap_successor[i].pred_hints = hap_successor_hints + (i * n_sites);
-            hap_successor[i].count = 0;
-        }
-        
+        // PASS 1: Count successors AND total runs
+        std::vector<size_t> successor_counts(n_haplotypes, 0);
+
         std::unique_ptr<uint16_t[]> pref = std::make_unique<uint16_t[]>(n_haplotypes);
         std::iota(pref.get(), pref.get() + n_haplotypes, 0u);
         std::unique_ptr<char[]> pbwt_column = std::make_unique<char[]>(n_haplotypes);
-        
+
         size_t total_runs = 0;
-        run_count = 0;
-        col_run_index[0] = 0;
-        
+
         std::unique_ptr<uint16_t[]> last_pref;
         sdsl::bit_vector last_bv;
+
+        for (size_t site_idx = 0; site_idx < n_sites; ++site_idx)
+        {
+            const sdsl::bit_vector &original_column = all_columns[site_idx];
+            sdsl::bit_vector bv(n_haplotypes, 0);
+
+            for (size_t i = 0; i < n_haplotypes; ++i)
+            {
+                bool val = original_column[pref[i]];
+                pbwt_column[i] = val;
+                bv[i] = val;
+            }
+
+            // Count runs in this column
+            size_t column_runs = 1;
+            successor_counts[pref[0]]++;
+
+            for (size_t idx = 1; idx < n_haplotypes; ++idx)
+            {
+                if (bv[idx] != bv[idx - 1])
+                {
+                    successor_counts[pref[idx]]++;
+                    column_runs++;
+                }
+            }
+
+            total_runs += column_runs;
+
+            updatePBWTState(pref.get(), pbwt_column.get());
+
+            if (site_idx == n_sites - 1)
+            {
+                last_pref = std::make_unique<uint16_t[]>(n_haplotypes);
+                std::copy(pref.get(), pref.get() + n_haplotypes, last_pref.get());
+                last_bv = bv;
+            }
+        }
+
+        // Count final virtual column runs
+        size_t final_column_runs = 1;
+        for (size_t idx = 1; idx < n_haplotypes; ++idx)
+        {
+            if (last_bv[idx] != last_bv[idx - 1])
+            {
+                final_column_runs++;
+            }
+            successor_counts[last_pref[idx]]++;
+        }
+        total_runs += final_column_runs;
+
+        // Calculate total successors and allocate
+        size_t total_successors = 0;
+        for (size_t i = 0; i < n_haplotypes; ++i)
+            total_successors += successor_counts[i];
+
+        std::cout << "Successory array size: " << total_successors << "\n";
+        std::cout << "Average successors per haplotype: "
+                  << (total_successors / static_cast<double>(n_haplotypes)) << "\n";
+
+        // Allocate contiguous arrays for all successors
+        hap_successor = new SuccessorInfo[n_haplotypes];
+        hap_successor_sites = new uint32_t[total_successors];
+        hap_successor_preds = new uint16_t[total_successors];
+        hap_successor_hints = new uint32_t[total_successors];
+
+        // Set up pointers for each haplotype
+        size_t offset = 0;
+        for (size_t i = 0; i < n_haplotypes; ++i)
+        {
+            hap_successor[i].sites = hap_successor_sites + offset;
+            hap_successor[i].predecessors = hap_successor_preds + offset;
+            hap_successor[i].pred_hints = hap_successor_hints + offset;
+            hap_successor[i].count = 0;
+            hap_successor[i].capacity = successor_counts[i];
+            offset += successor_counts[i];
+        }
+
+        // Allocate run capacity sized run-sampled data structures
+        run_capacity = total_runs;
+        run_begin_positions = std::make_unique<uint16_t[]>(run_capacity);
+        run_beg_prefs = std::make_unique<uint16_t[]>(run_capacity);
+        run_phi_info = std::make_unique<PhiInfo[]>(run_capacity);
+
+        // PASS 2: Build forward PBWT and fill arrays
+        std::iota(pref.get(), pref.get() + n_haplotypes, 0u);
+
+        run_count = 0;
+        col_run_index[0] = 0;
+        total_runs = 0; // Recount for verification
 
         for (size_t site_idx = 0; site_idx < n_sites; ++site_idx)
         {
@@ -222,7 +278,6 @@ private:
             }
 
             size_t column_runs = 1;
-            resize_runs_if_needed();
             run_begin_positions[run_count] = 0;
             run_beg_prefs[run_count] = pref[0];
             run_phi_info[run_count] = {pref[0], static_cast<uint32_t>(hap_successor[pref[0]].count)};
@@ -234,10 +289,14 @@ private:
                 {
                     uint16_t current_hap = pref[idx];
                     uint16_t pred_hap = pref[idx - 1];
-                    
+
                     auto &succ = hap_successor[current_hap];
-                    
-                    resize_runs_if_needed();
+
+                    if (succ.count >= succ.capacity)
+                    {
+                        throw std::runtime_error("Successor count exceeded capacity - counting pass mismatch!");
+                    }
+
                     run_begin_positions[run_count] = static_cast<uint16_t>(idx);
                     run_beg_prefs[run_count] = current_hap;
                     run_phi_info[run_count] = {current_hap, static_cast<uint32_t>(succ.count)};
@@ -247,13 +306,13 @@ private:
                     succ.predecessors[succ.count] = pred_hap;
                     succ.pred_hints[succ.count] = 0;
                     succ.count++;
-                    
+
                     column_runs++;
                 }
             }
 
             end_prefs[site_idx] = pref[n_haplotypes - 1];
-            
+
             total_runs += column_runs;
             col_run_index[site_idx + 1] = static_cast<uint32_t>(total_runs);
             forward_pbwt[site_idx] = CompressedColumn(bv);
@@ -269,8 +328,6 @@ private:
             }
         }
 
-        size_t final_column_runs = 1;
-        resize_runs_if_needed();
         run_begin_positions[run_count] = 0;
         run_beg_prefs[run_count] = last_pref[0];
         run_phi_info[run_count] = {last_pref[0], static_cast<uint32_t>(hap_successor[last_pref[0]].count)};
@@ -280,42 +337,46 @@ private:
         {
             uint16_t current_hap = last_pref[idx];
             uint16_t pred_hap = last_pref[idx - 1];
-            
+
             auto &succ = hap_successor[current_hap];
-            
+
             if (last_bv[idx] != last_bv[idx - 1])
             {
-                resize_runs_if_needed();
                 run_begin_positions[run_count] = static_cast<uint16_t>(idx);
                 run_beg_prefs[run_count] = current_hap;
                 run_phi_info[run_count] = {current_hap, static_cast<uint32_t>(succ.count)};
                 run_count++;
                 final_column_runs++;
             }
-            
+
+            if (succ.count >= succ.capacity)
+            {
+                throw std::runtime_error("Successor count exceeded capacity in final column!");
+            }
+
             succ.sites[succ.count] = static_cast<uint32_t>(n_sites - 1);
             succ.predecessors[succ.count] = pred_hap;
             succ.pred_hints[succ.count] = 0;
             succ.count++;
         }
-        
+
         total_runs += final_column_runs;
         col_run_index[n_sites + 1] = static_cast<uint32_t>(total_runs);
-        // Now compute hints with the resized arrays
+
+        // Compute hints
         for (uint16_t hap = 0; hap < n_haplotypes; ++hap)
         {
             auto &succ = hap_successor[hap];
-            
+
             for (size_t i = 0; i < succ.count; ++i)
             {
                 uint32_t site = succ.sites[i];
                 uint16_t pred = succ.predecessors[i];
-
                 const auto &pred_succ = hap_successor[pred];
-                
+
                 size_t left = 0;
                 size_t right = pred_succ.count;
-                
+
                 while (left < right)
                 {
                     size_t mid = left + (right - left) / 2;
@@ -329,7 +390,7 @@ private:
             }
         }
     }
-    
+    // just build the Prev matrix
     void buildReversePBWT()
     {
         std::unique_ptr<uint16_t[]> pref = std::make_unique<uint16_t[]>(n_haplotypes);
@@ -424,7 +485,7 @@ private:
         hts_close(fp);
     }
 
-    void updatePBWTState(uint16_t* pref, const char* column) const
+    void updatePBWTState(uint16_t *pref, const char *column) const
     {
         size_t count0 = 0;
         for (size_t i = 0; i < n_haplotypes; ++i)
@@ -450,6 +511,7 @@ private:
         std::copy(new_pref.get(), new_pref.get() + n_haplotypes, pref);
     }
 
+    // Process the query file and store the queries
     void processQueryFile(const std::string &query_file)
     {
         htsFile *qfp = hts_open(query_file.c_str(), "rb");
@@ -529,6 +591,7 @@ private:
         hts_close(qfp);
     }
 
+    // LCS: Calculates the longest common suffix match on the reverse PBWT and returns match length 
     int LCS(const sdsl::bit_vector &query, int col_idx)
     {
         if (n_sites == 0 || col_idx < 0 || col_idx >= static_cast<int>(n_sites))
@@ -572,6 +635,7 @@ private:
         return static_cast<int>(lcs);
     }
 
+    // Calculates the longest common prefix match between the column and forward PBWT from a col index given a valid LCS match from LCS function, return BMLreturn type
     BMLreturn LCP(const sdsl::bit_vector &query, int col_idx)
     {
         if (n_sites == 0 || col_idx < 0 || col_idx >= static_cast<int>(n_sites))
@@ -582,7 +646,7 @@ private:
         unsigned int lcp = 0;
         std::pair<unsigned int, unsigned int> interval = {start, end};
         int last_valid_col = col_idx - 1;
-        
+
         uint16_t last_pref = (col_idx > 0) ? end_prefs[col_idx - 1] : static_cast<uint16_t>(n_haplotypes - 1);
 
         for (lcp = 0; col_idx + static_cast<int>(lcp) < static_cast<int>(n_sites); ++lcp)
@@ -608,15 +672,15 @@ private:
                 break;
 
             bool last_bit = column.bv[end];
-            
+
             if (last_bit != query_bit)
             {
                 uint32_t run_idx = col_run_index[current_col];
                 uint32_t num_runs_in_col = col_run_index[current_col + 1] - run_idx;
-                
+
                 size_t left = 0;
                 size_t right = num_runs_in_col;
-                
+
                 while (left < right)
                 {
                     size_t mid = left + (right - left) / 2;
@@ -627,7 +691,7 @@ private:
                 }
                 size_t r = (left > 0) ? left - 1 : 0;
                 size_t global_run_idx = run_idx + r;
-                
+
                 PhiInfo phi_info = run_phi_info[global_run_idx];
                 const auto &succ = hap_successor[phi_info.hap];
                 last_pref = succ.predecessors[phi_info.idx];
@@ -641,42 +705,43 @@ private:
 
         return {lcp, interval, last_valid_col, last_pref};
     }
-
+    // φ with hint to get the preceding haplotype given a haplotype and it's column and the hint to the run index
     std::pair<uint16_t, uint32_t> phi_with_hint(uint16_t hap, uint32_t col, uint32_t hint) const
     {
         const auto &succ = hap_successor[hap];
         if (succ.count == 0)
             return {hap, 0};
-        
+
         uint32_t idx = hint;
-        
+
         while (idx > 0 && succ.sites[idx - 1] >= col)
         {
             --idx;
         }
-        
+
         if (succ.sites[idx] >= col)
         {
             return {succ.predecessors[idx], idx};
         }
-        
+
         return {succ.predecessors[succ.count - 1], static_cast<uint32_t>(succ.count - 1)};
     }
 
+    // takes the LCP interval and interval ending haplotype and builds the Prefixes of haplotypes for the interval using φ
     std::vector<uint16_t> getOriginalIndicesForInterval(size_t col, uint16_t start, uint16_t end, uint16_t interval_end_hap)
     {
         std::vector<uint16_t> result(end - start + 1);
-        
+
         uint16_t current_hap = interval_end_hap;
         uint16_t prev_calling_hap = interval_end_hap;
         uint32_t prev_result_idx = 0;
-        
+
         uint32_t run_idx = col_run_index[col];
         uint32_t num_runs_in_col = col_run_index[col + 1] - run_idx;
-        
+
         size_t left = 0;
         size_t right = num_runs_in_col;
-        
+
         while (left < right)
         {
             size_t mid = left + (right - left) / 2;
@@ -687,29 +752,30 @@ private:
         }
         size_t r = (left > 0) ? left - 1 : 0;
         size_t global_run_idx = run_idx + r;
-        
+
         PhiInfo initial_phi = run_phi_info[global_run_idx];
         prev_result_idx = initial_phi.idx;
-        
+
         for (uint16_t pos = end;; --pos)
         {
             result[pos - start] = current_hap;
-            
+
             if (pos == start)
                 break;
-            
+
             uint16_t calling_hap = current_hap;
             uint32_t hint = hap_successor[prev_calling_hap].pred_hints[prev_result_idx];
             std::pair<uint16_t, uint32_t> result_pair = phi_with_hint(current_hap, static_cast<uint32_t>(col), hint);
-            
+
             current_hap = result_pair.first;
             prev_calling_hap = calling_hap;
             prev_result_idx = result_pair.second;
         }
-        
+
         return result;
     }
-    
+
+    // performs all the queries in the query file and writes the output in a output file (omp for multi-thread support)
     void processBML(unsigned int L, const std::string &output_file)
     {
         const size_t num_threads = static_cast<size_t>(std::max(1, omp_get_max_threads()));
@@ -739,7 +805,7 @@ private:
         }
         out.close();
     }
-    
+
     void BML(const sdsl::bit_vector &query, unsigned int L, size_t query_index, std::string &output)
     {
         const int m = static_cast<int>(query.size());

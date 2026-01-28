@@ -354,7 +354,7 @@ private:
                 throw std::runtime_error("Successor count exceeded capacity in final column!");
             }
 
-            succ.sites[succ.count] = static_cast<uint32_t>(n_sites - 1);
+            succ.sites[succ.count] = static_cast<uint32_t>(n_sites);
             succ.predecessors[succ.count] = pred_hap;
             succ.pred_hints[succ.count] = 0;
             succ.count++;
@@ -647,7 +647,7 @@ private:
         std::pair<unsigned int, unsigned int> interval = {start, end};
         int last_valid_col = col_idx - 1;
 
-        uint16_t last_pref = (col_idx > 0) ? end_prefs[col_idx - 1] : static_cast<uint16_t>(n_haplotypes - 1);
+        uint16_t last_pref = end_prefs[col_idx];
 
         for (lcp = 0; col_idx + static_cast<int>(lcp) < static_cast<int>(n_sites); ++lcp)
         {

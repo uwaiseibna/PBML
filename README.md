@@ -2,7 +2,7 @@
 
 PBML (Positional Boyer-Moore-Li) adapts the BML (Boyer-Moore-Li) algorithm — combining Boyer-Moore string search with Heng Li's forward-backward algorithm, originally proposed by T. Gagie for BWT — into the PBWT (Positional Burrows-Wheeler Transform) framework. It builds forward and reverse RLE-compressed PBWTs to perform LCP/LCS queries and reports k-SMEMs (Set Maximal Exact Matches) of configurable minimum length from query haplotypes against a reference panel.
 
-PBML uses SDSL and htslib libraries. Input files must be in `.bcf` format.
+PBML uses SDSL and htslib libraries. Input files must be in `.bcf/.vcf` format.
 
 ## Implementations
 
@@ -36,8 +36,8 @@ Modes:
   run      Build and query (no index saved)
 
 Options:
-  -p, --panel <file>     Panel BCF file (index/run modes)
-  -q, --query <file>     Query BCF file (query/run modes)
+  -p, --panel <file>     Panel BCF/VCF file (index/run modes)
+  -q, --query <file>     Query BCF/VCF file (query/run modes)
   -i, --index <file>     Index file (query: input, index: output)
   -o, --output <file>    Output file [default: smems.tsv]
   -L, --length <int>     Minimum SMEM length [default: 1]

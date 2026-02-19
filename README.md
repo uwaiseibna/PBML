@@ -1,36 +1,76 @@
 # PBML
-PBML is adaptation of BML (Boyer-Moore-Li) trick into indexing and querying of PBWT (Positional Burrows--Wheeler Transform). Boyer-Moore string search algorithm and Heng Li's forward backward was combined into one algorithm named BML by T. Gagie. PBML adapts BML into the PBWT framework and performs and contiguous memory allocation trick. PBML builds two PBWTs one in the forward direction another in the reverse direction to perform LCP and LCS and a run-based haplotype-retrieval and can report SMEMs (Set Maximal Exact Match) of configurable minimum length given a panel and a set of queries (.bcf) format, it uses SDSL, and HTSLIB libraries. It can outperform available run-sampled PBWT tools in querying and indexing time with competitive memory usage. PBML is highly scalable and multi-thread querying performance achieves signficant querying speedup with near constant memory footprint and usable on UK biobank scale data.
+
+PBML (Positional Boyer-Moore-Li) adapts the BML (Boyer-Moore-Li) algorithm — combining Boyer-Moore string search with Heng Li's forward-backward algorithm, originally proposed by T. Gagie for BWT — into the PBWT (Positional Burrows-Wheeler Transform) framework. It builds forward and reverse RLE-compressed PBWTs to perform LCP/LCS queries and reports k-SMEMs (Set Maximal Exact Matches) of configurable minimum length from query haplotypes against a reference panel.
+
+PBML uses SDSL and htslib libraries. Input files must be in `.bcf` format.
+
+## Implementations
+
+Two implementations are provided in `src/`:
+
+- **`pbml.cpp`** — Uses φ (phi) operations with successor arrays and hint-guided lookups (inspired by MOVI) to recover haplotype IDs directly during parallel querying. Larger index (~20R + 12N bytes) but no reconstruction pass needed.
+
+- **`pbmlRecon.cpp`** — Two-phase approach: Phase 1 runs BML in parallel collecting SMEM descriptors (intervals only), Phase 2 replays the prefix array left-to-right to resolve haplotype IDs. Smaller index (~2(R+R_rev) + 12N bytes) with no phi/successor structures.
+
+Both produce identical output.
 
 ## Build
-clone the repository and inside the repository directory run the following commands.
-```
-#Requires CMake installed, once CMake is installed run:
 
-mkdir build
-cd build
-cmake ..
-make -j
+```bash
+mkdir build && cd build
+cmake .. && make -j
 ```
-The binary will be stored in the build directory named `pbml`.
 
+This builds two binaries in `build/`: `pbml` and `pbmlRecon`.
 
 ## Usage
-```
-#mono-thread
-OMP_NUM_THREADS=1 ./build/pbml <dir/.../panel.bcf> <dir/.../query.bcf> <minimum_SMEM_length> <output_name>
-
-#multi-thread (n threads)
-OMP_NUM_THREADS=n ./build/pbml <dir/.../panel.bcf> <dir/.../query.bcf> <minimum_SMEM_length> <output_name>
 
 ```
+./pbml <mode> [options]
 
-## Output format
+Modes:
+  index    Build and save index from panel
+  query    Query from saved index
+  run      Build and query (no index saved)
+
+Options:
+  -p, --panel <file>     Panel BCF file (index/run modes)
+  -q, --query <file>     Query BCF file (query/run modes)
+  -i, --index <file>     Index file (query: input, index: output)
+  -o, --output <file>    Output file [default: smems.tsv]
+  -L, --length <int>     Minimum SMEM length [default: 1]
+  -k, --min-occ <int>    Minimum occurrences [default: 1]
+  -t, --threads <int>    Number of threads [default: all]
 ```
-#Each line reports a SMEM with following tab seperated information:
-<haplotype> <starting column> <ending column> <length>
+
+### Examples
+
+```bash
+# Build index
+./pbml index -p panel.bcf -i panel.pbml
+
+# Query from index
+./pbml query -i panel.pbml -q query.bcf -L 5 -o smems.tsv
+
+# Build and query in one step
+./pbml run -p panel.bcf -q query.bcf -L 5 -k 1
+
+# Single-threaded
+OMP_NUM_THREADS=1 ./pbml run -p panel.bcf -q query.bcf -L 5
+```
+
+Same usage applies to `pbmlRecon`.
+
+## Output Format
+
+Tab-separated, one line per SMEM match:
+
+```
+query_id    panel_haplotype    start_site    end_site    length
 ```
 
 ## Citation
+
 ```
 @article{islam2025scalable,
   title={Scalable PBWT Queries with Minimum-Length SMEM Constraints},

@@ -17,6 +17,8 @@ Both produce identical output.
 ## Build
 
 ```bash
+git clone https://github.com/uwaiseibna/PBML.git
+cd PBML
 mkdir build && cd build
 cmake .. && make -j
 ```

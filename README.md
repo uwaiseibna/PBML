@@ -77,8 +77,8 @@ Average per-chromosome performance on 1000 Genomes Project Phase 3 (chromosomes 
 
 | Method | Build (s/M sites) | Query (s/M sites) | Peak Memory (GB) |
 |--------|:-:|:-:|:-:|
-| **PBML** (this repo) | 45.19 (43.86–46.12) | 49.08 (44.86–67.42) | 6.4 (2.4–12.4) |
-| **PBML'** (this repo) | 28.21 (27.65–37.18) | **46.78 (41.91–62.56)** | **4.0 (1.2–7.6)** |
+| **pbml** (this repo) | 45.19 (43.86–46.12) | 49.08 (44.86–67.42) | 6.4 (2.4–12.4) |
+| **pbmlRecon** (this repo) | 28.21 (27.65–37.18) | **46.78 (41.91–62.56)** | **4.0 (1.2–7.6)** |
 | [μ-PBWT](https://github.com/dlcgold/muPBWT) | 63.76 (62.72–65.88) | 233.90 (200.48–276.75) | 9.1 (2.8–17.4) |
 | [Dynamic μ-PBWT](https://github.com/ucfcbb/Dynamic-mu-PBWT) | 212.45 (203.46–351.44) | 582.28 (485.38–756.82) | 24.2 (9.4–46.0) |
 | [PBWT](https://github.com/richarddurbin/pbwt) | **20.20 (14.95–20.60)** | 121.75 (113.36–135.03) | 176.2 (52.3–336.2) |

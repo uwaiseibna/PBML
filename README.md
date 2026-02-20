@@ -75,7 +75,7 @@ query_id    panel_haplotype    start_site    end_site    length
 
 Average per-chromosome performance on 1000 Genomes Project Phase 3 (chromosomes 1–22, 4,008 haplotype panel, 1,000 query haplotypes, single-threaded). Build and query times normalized per million variant sites.
 
-| Method | Build (s/M sites) | Query (s/M sites) | Peak Memory (GB) |
+| Method | Build Time (s/M sites) | Query Time (s/M sites) | Peak Memory (GB) |
 |--------|:-:|:-:|:-:|
 | **pbml** (this repo) | 45.19 (43.86–46.12) | 49.08 (44.86–67.42) | 6.4 (2.4–12.4) |
 | **pbmlRecon** (this repo) | 28.21 (27.65–37.18) | **46.78 (41.91–62.56)** | **4.0 (1.2–7.6)** |

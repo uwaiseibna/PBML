@@ -73,15 +73,18 @@ query_id    panel_haplotype    start_site    end_site    length
 
 ## Benchmark
 
-Average per-chromosome performance on 1000 Genomes Project Phase 3 (chromosomes 1–22, 4,008 haplotype panel, 1,000 query haplotypes, single-threaded).
+Average per-chromosome performance on 1000 Genomes Project Phase 3 (chromosomes 1–22, 4,008 haplotype panel, 1,000 query haplotypes, single-threaded). Build and query times normalized per million variant sites.
 
-| Method | Build Time (s) | Query Time (s) | Peak Memory (GB) |
+| Method | Build (s/M sites) | Query (s/M sites) | Peak Memory (GB) |
 |--------|:-:|:-:|:-:|
-| **PBML** (this repo) | 160.0 | 175.6 | 6.8 |
-| **PBML-Recon** (this repo) | 107.3 | **165.3** | **4.0** |
-| [μ-PBWT](https://github.com/dlcgold/muPBWT) | 225.3 | 818.7 | 9.1 |
-| [Dynamic μ-PBWT](https://github.com/ucfcbb/Dynamic-mu-PBWT) | 781.9 | 2,048.3 | 25.8 |
-| [PBWT](https://github.com/richarddurbin/pbwt) | **69.1** | 440.3 | 175.3 |
+| **PBML** (this repo) | 45.19 (43.86–46.12) | 49.08 (44.86–67.42) | 6.4 (2.4–12.4) |
+| **PBML'** (this repo) | 28.21 (27.65–37.18) | **46.78 (41.91–62.56)** | **4.0 (1.2–7.6)** |
+| [μ-PBWT](https://github.com/dlcgold/muPBWT) | 63.76 (62.72–65.88) | 233.90 (200.48–276.75) | 9.1 (2.8–17.4) |
+| [Dynamic μ-PBWT](https://github.com/ucfcbb/Dynamic-mu-PBWT) | 212.45 (203.46–351.44) | 582.28 (485.38–756.82) | 24.2 (9.4–46.0) |
+| [PBWT](https://github.com/richarddurbin/pbwt) | **20.20 (14.95–20.60)** | 121.75 (113.36–135.03) | 176.2 (52.3–336.2) |
+
+Values are median (min–max) across chromosomes.
+
 
 
 ## Citation

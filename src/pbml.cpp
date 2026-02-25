@@ -25,56 +25,6 @@ PBML Features:
 All persistent data structures are RLE-compressed. The temporary all_columns array (used during construction
 to build the reverse PBWT from memory) is freed after construction and not required for querying.
 ================================================================================
-TIME COMPLEXITY ANALYSIS
-================================================================================
-Let:
-  N = number of variant sites
-  M = number of haplotypes in panel
-  R = total number of runs in forward PBWT (R_fwd ≈ R_rev in practice)
-  r = R / N = average runs per column
-  m = query haplotype length (typically m = N)
-  Q = number of query haplotypes
-  P = number of parallel threads
-  k = number of occurrences (matches) for a SMEM
-CONSTRUCTION:
--------------
-  Panel I/O:           O(N × M)       - Reading and storing all columns
-  Forward PBWT:        O(N × M)       - Two passes: inline RLE + successor counting, then phi structures
-  Reverse PBWT:        O(N × M)       - Single pass right-to-left with inline RLE
-  Hint computation:    O(R × log(R/M)) - Binary search for each successor entry
-  ─────────────────────────────────────
-  Total Construction:  O(N × M + R × log(R/M))
-  In practice, R << N × M due to haplotype similarity, so construction is dominated by O(N × M).
-QUERY (per haplotype):
-----------------------
-  BML algorithm iterates through query positions with Boyer-Moore-style skips.
-  LCS (backward extension):  O(L × r) per call, where L = match length found
-  LCP (forward extension):   O(L × r) per call
-  Phi operations:            O(1) amortized per step (due to hint mechanism)
-  Index recovery:            O(log S + k) per SMEM, where S = successors per haplotype
-  ─────────────────────────────────────
-  Total per query:           O(m × r) expected
-  For Q queries with P threads:
-  Total Query Time:          O(Q × m × r / P) expected
-SPACE COMPLEXITY:
------------------
-  Forward RLE:         O(R) for runLens, run_begin_positions, run_phi_info
-  Reverse RLE:         O(R) for runLens_rev
-  Column metadata:     O(N) for colPtrs, colCs, startBits, end_prefs
-  Successor arrays:    O(R) for sites, predecessors, pred_hints
-  ─────────────────────────────────────
-  Total Index Size:    O(R + N)
-  Since R is O(N × r) where r << M (on 1KGP phase 3, we have r ~ 14, and M = 5008), the index is much smaller than O(N × M).
-  Compression ratio depends on haplotype similarity.
-INDEX FILE SIZE:
-----------------
-  Approximately: 2R × sizeof(uint16_t)     [runLens, run_begin_positions]
-               + R × sizeof(PhiInfo)        [run_phi_info: 6 bytes each]
-               + R × 10 bytes               [successor arrays]
-               + 4N × sizeof(uint32_t)      [colPtrs_fwd, colPtrs_rev]
-               + 4N × sizeof(uint16_t)      [colCs, startBits, end_prefs]
-  ≈ 20R + 12N bytes
-================================================================================
 */
 #include <htslib/hts.h>
 #include <htslib/vcf.h>

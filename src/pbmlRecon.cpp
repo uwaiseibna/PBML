@@ -32,62 +32,6 @@ PBML Features:
 
 All persistent data structures are RLE-compressed. The temporary all_columns array (used during construction
 to build the PBWTs from memory) is freed after construction and not required for querying.
-
-================================================================================
-TIME COMPLEXITY ANALYSIS
-================================================================================
-
-Let:
-  N = number of variant sites
-  M = number of haplotypes in panel
-  R = total number of runs in forward PBWT (R_fwd ≈ R_rev in practice)
-  r = R / N = average runs per column
-  m = query haplotype length (typically m = N)
-  Q = number of query haplotypes
-  P = number of parallel threads
-
-CONSTRUCTION:
--------------
-  Panel I/O:           O(N × M)       - Reading and storing all columns
-  Forward PBWT:        O(N × M)       - Single pass: build RLE structures
-  Reverse PBWT:        O(N × M)       - Single pass right-to-left
-  ─────────────────────────────────────
-  Total Construction:  O(N × M)
-
-QUERY:
-------
-  Phase 1 - BML (per haplotype):
-    LCS (backward extension):  O(L × r) per call, where L = match length found
-    LCP (forward extension):   O(L × r) per call
-    ─────────────────────────────────────
-    Total per query:           O(m × r) expected
-    For Q queries with P threads:
-    Phase 1 Total:             O(Q × m × r / P)
-
-  Phase 2 - Reconstruction:
-    Single pass over N columns: O(N × M) total
-    ─────────────────────────────────────
-    Phase 2 Total:             O(N × M)
-
-  Total Query Time:            O(Q × m × r / P + N × M)
-
-SPACE COMPLEXITY:
------------------
-  Forward RLE:         O(R) for runLens
-  Reverse RLE:         O(R_rev) for runLens_rev
-  Column metadata:     O(N) for colPtrs, colCs, startBits
-  ─────────────────────────────────────
-  Total Index Size:    O(R + N)
-
-INDEX FILE SIZE:
-----------------
-  Approximately: R × sizeof(uint16_t)       [runLens_fwd]
-               + R_rev × sizeof(uint16_t)   [runLens_rev]
-               + 2(N+1) × sizeof(uint32_t)  [colPtrs_fwd, colPtrs_rev]
-               + 2N × sizeof(uint16_t)      [colCs]
-               + 2N × sizeof(char)          [startBits]
-  ≈ 2(R + R_rev) + 12N bytes
-
 ================================================================================
 */
 

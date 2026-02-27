@@ -2,7 +2,7 @@
 
 **Fast, memory-efficient enumeration of set-maximal exact matches (SMEMs) from query haplotypes against a reference panel.**
 
-PBML finds all haplotype segments in a query that match at least *k* panel haplotypes and cannot be extended without losing matches — with a configurable minimum length *L*. No other PBWT-based tool supports minimum-length SMEM constraints (*kL*-SMEMs).
+PBML finds all haplotype segments in a query that match at least *k* panel haplotypes and cannot be extended without losing matches (SMEMs) — with a configurable minimum length *L*. No other PBWT-based tool supports minimum-length SMEM constraints (*kL*-SMEMs).
 
 ## Highlights
 
@@ -96,7 +96,7 @@ Two variants are provided in `src/`, both producing identical output:
 
 ## How It Works
 
-PBML adapts the BML (Boyer-Moore-Li) algorithm — originally proposed by T. Gagie for BWT — to the PBWT framework. It builds forward and reverse run-length encoded PBWTs and uses LCP/LCS queries with Boyer-Moore skip logic to enumerate SMEMs efficiently. See the [paper](https://doi.org/10.1101/2025.12.01.630756) for details.
+PBML adapts the BML (Boyer-Moore-Li) algorithm — originally proposed by T. Gagie for BWT — to the PBWT framework. It builds forward and reverse run-length encoded PBWTs and uses LCP/LCS queries with Boyer-Moore skip logic to enumerate SMEMs efficiently. See the [paper]([https://doi.org/10.1101/2025.12.01.630756](https://www.biorxiv.org/content/10.64898/2025.12.01.691644v1)) for details.
 
 ## Citation
 

@@ -310,18 +310,10 @@ public:
             throw std::invalid_argument("L must be positive");
         auto start_total = std::chrono::high_resolution_clock::now();
         buildFromPanel(panel_file);
-        auto end_construction = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::milli> construction_time = end_construction - start_total;
-        std::cout << "Built PBWTs of " << n_haplotypes << " haplotypes and "
-                  << n_sites << " variable sites in " << construction_time.count() / 1000.0 << "s\n";
         processQueryFile(query_file);
-        auto start_query = std::chrono::high_resolution_clock::now();
         processBML(static_cast<unsigned>(L), k, output_file);
-        auto end_query = std::chrono::high_resolution_clock::now();
         auto end_total = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::milli> query_time = end_query - start_query;
         std::chrono::duration<double, std::milli> total_time = end_total - start_total;
-        std::cout << "Queried in " << query_time.count() / 1000.0 << "s\n";
         std::cout << "Total time: " << total_time.count() / 1000.0 << "s\n";
     }
 
@@ -449,28 +441,75 @@ public:
         }
         auto start = std::chrono::high_resolution_clock::now();
         const size_t num_threads = static_cast<size_t>(std::max(1, omp_get_max_threads()));
-        std::vector<std::string> thread_outputs(num_threads);
         int n = static_cast<int>(queries.size());
         int B = 2;
         int chunk_size = (1 > n / (num_threads + B) ? 1 : n / (num_threads + B));
-        for (auto &output : thread_outputs)
-            output.reserve(512 * 1024);
-#pragma omp parallel for schedule(dynamic, chunk_size)
-        for (int i = 0; i < n; ++i)
+
+        if (k > 1)
         {
-            int thread_id = omp_get_thread_num();
-            BML(queries[i], L, k, static_cast<size_t>(i), thread_outputs[thread_id]);
-        }
-        std::ofstream out(output_file, std::ios::binary);
-        out.rdbuf()->pubsetbuf(nullptr, 65536);
-        for (const auto &thread_output : thread_outputs)
-        {
-            if (!thread_output.empty())
+            // Streaming mode: per-thread temp files, μ-PBWT-style format
+            // Format per SMEM: start, length, [hap1 hap2 hap3 ...]
+            std::vector<std::string> tmp_paths(num_threads);
+            std::vector<FILE *> tmp_files(num_threads, nullptr);
+            for (size_t t = 0; t < num_threads; ++t)
             {
-                out.write(thread_output.data(), static_cast<std::streamsize>(thread_output.size()));
+                tmp_paths[t] = output_file + ".tmp." + std::to_string(t);
+                tmp_files[t] = std::fopen(tmp_paths[t].c_str(), "wb");
+                if (!tmp_files[t])
+                    throw std::runtime_error("Failed to open temp file: " + tmp_paths[t]);
+                std::setvbuf(tmp_files[t], nullptr, _IOFBF, 256 * 1024);
             }
+
+#pragma omp parallel for schedule(dynamic, chunk_size)
+            for (int i = 0; i < n; ++i)
+            {
+                int thread_id = omp_get_thread_num();
+                BML_streaming(queries[i], L, k, static_cast<size_t>(i), tmp_files[thread_id]);
+            }
+
+            // Concatenate temp files into final output
+            std::ofstream out(output_file, std::ios::binary);
+            out.rdbuf()->pubsetbuf(nullptr, 65536);
+            std::vector<char> copy_buf(256 * 1024);
+            for (size_t t = 0; t < num_threads; ++t)
+            {
+                std::fclose(tmp_files[t]);
+                FILE *in = std::fopen(tmp_paths[t].c_str(), "rb");
+                if (in)
+                {
+                    size_t bytes_read;
+                    while ((bytes_read = std::fread(copy_buf.data(), 1, copy_buf.size(), in)) > 0)
+                        out.write(copy_buf.data(), static_cast<std::streamsize>(bytes_read));
+                    std::fclose(in);
+                }
+                std::remove(tmp_paths[t].c_str());
+            }
+            out.close();
         }
-        out.close();
+        else
+        {
+            // Buffered mode: k=1, original format (one line per haplotype)
+            std::vector<std::string> thread_outputs(num_threads);
+            for (auto &output : thread_outputs)
+                output.reserve(512 * 1024);
+
+#pragma omp parallel for schedule(dynamic, chunk_size)
+            for (int i = 0; i < n; ++i)
+            {
+                int thread_id = omp_get_thread_num();
+                BML_buffered(queries[i], L, k, static_cast<size_t>(i), thread_outputs[thread_id]);
+            }
+
+            std::ofstream out(output_file, std::ios::binary);
+            out.rdbuf()->pubsetbuf(nullptr, 65536);
+            for (const auto &thread_output : thread_outputs)
+            {
+                if (!thread_output.empty())
+                    out.write(thread_output.data(), static_cast<std::streamsize>(thread_output.size()));
+            }
+            out.close();
+        }
+
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed = end - start;
         std::cout << "Queried " << queries.size() << " haplotypes in " << elapsed.count() / 1000.0 << "s\n";
@@ -1270,7 +1309,12 @@ private:
     // SECTION: BML Algorithm
     // ============================================================
 
-    void BML(const sdsl::bit_vector &query, unsigned int L, unsigned int k, size_t query_index, std::string &output)
+    /*
+        BML_buffered: Original output mode for k=1.
+        One line per (query, panel_haplotype) pair, buffered in memory.
+        Format: query_idx\thap_idx\tstart\tend\tlength\n
+    */
+    void BML_buffered(const sdsl::bit_vector &query, unsigned int L, unsigned int k, size_t query_index, std::string &output)
     {
         const int m = static_cast<int>(query.size());
         const int L_int = static_cast<int>(L);
@@ -1307,6 +1351,59 @@ private:
                     if (len > 0)
                         output.append(buffer, static_cast<size_t>(len));
                 }
+            }
+            left = smem_end - L_int + 2;
+        }
+    }
+
+    /*
+        BML_streaming: Streaming output for k>1.
+        One line per SMEM with all haplotypes listed, written directly to FILE*.
+        Format (matches μ-PBWT): query_idx\nstart, length, [hap1 hap2 hap3 ]\n
+        Eliminates memory buildup from large output at high k values.
+    */
+    void BML_streaming(const sdsl::bit_vector &query, unsigned int L, unsigned int k, size_t query_index, FILE *fp)
+    {
+        const int m = static_cast<int>(query.size());
+        const int L_int = static_cast<int>(L);
+        int left = 0;
+        bool header_written = false;
+        while (left + L_int - 1 < m)
+        {
+            const int col = left + L_int - 1;
+            const int lcs_result = LCS(query, col, k);
+            if (lcs_result < L_int)
+            {
+                const int partial_match_len = lcs_result;
+                const int jump = std::max(1, (partial_match_len > 0) ? (L_int - partial_match_len) : L_int);
+                left += jump;
+                continue;
+            }
+            const int smem_start = col - lcs_result + 1;
+            BMLreturn lcp_result = LCP(query, smem_start, k);
+            const int smem_length = static_cast<int>(lcp_result.lce);
+            const int smem_end = smem_start + smem_length - 1;
+            if (smem_length >= L_int)
+            {
+                // Write query header once per query
+                if (!header_written)
+                {
+                    std::fprintf(fp, "%zu\n", query_index);
+                    header_written = true;
+                }
+
+                std::vector<HapT> original_indices = getOriginalIndicesForInterval(
+                    smem_end + 1,
+                    lcp_result.interval.first,
+                    lcp_result.interval.second,
+                    lcp_result.interval_end_hap);
+
+                std::fprintf(fp, "%d, %d, [", smem_start, smem_length);
+                for (size_t idx = 0; idx < original_indices.size(); ++idx)
+                {
+                    std::fprintf(fp, "%u ", static_cast<unsigned>(original_indices[idx]));
+                }
+                std::fprintf(fp, "]\n");
             }
             left = smem_end - L_int + 2;
         }

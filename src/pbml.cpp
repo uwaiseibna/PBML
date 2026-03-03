@@ -30,14 +30,11 @@ to build the reverse PBWT from memory) is freed after construction and not requi
 */
 #include <htslib/hts.h>
 #include <htslib/vcf.h>
-#include <sdsl/bit_vectors.hpp>
-#include <sdsl/int_vector.hpp>
 #include <iostream>
 #include <vector>
 #include <string>
 #include <fstream>
 #include <chrono>
-#include <unordered_map>
 #include <memory>
 #include <algorithm>
 #include <numeric>

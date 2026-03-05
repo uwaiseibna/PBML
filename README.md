@@ -1,6 +1,6 @@
 # PBML
 
-**Fast, memory-efficient enumeration of set-maximal exact matches (SMEMs) from query haplotypes against a reference panel.**
+**Scaling the PBWT for Long-Range Shared Ancestry Detection in Large Haplotype Panels**
 
 PBML finds all haplotype segments in a query that match at least *k* panel haplotypes and minimum match length *L* and cannot be extended without losing matches (SMEMs). No other PBWT-based tool supports minimum-length SMEM constraints (*kL*-SMEMs).
 

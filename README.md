@@ -97,7 +97,7 @@ Two binaries are provided in `src/`, both producing identical output:
 
 ## Benchmarks
 
-Median across chromosomes 1–22 on 1000 Genomes Project Phase 3 (4,008 panel haplotypes, 1,000 queries, *k*, *L*=1, single-threaded). Build and query times normalized per million variant sites.
+Median across chromosomes 1–22 on 1000 Genomes Project Phase 3 (4,008 panel haplotypes, 1,000 queries, *k*=1, *L*=1, single-threaded). Build and query times normalized per million variant sites.
 
 | Method | Build (s/M sites) | Query (s/M sites) | Peak Memory (GB) |
 |--------|:-:|:-:|:-:|

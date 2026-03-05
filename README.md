@@ -2,38 +2,39 @@
 
 **Scaling the PBWT for Long-Range Shared Ancestry Detection in Large Haplotype Panels**
 
-PBML finds all haplotype segments in a query that match at least *k* panel haplotypes and minimum match length *L* and cannot be extended without losing matches (SMEMs). No other PBWT-based tool supports minimum-length SMEM constraints (*kL*-SMEMs).
+PBML finds all set maximal exact matches (SMEMs) in a query haplotype against a reference panel, subject to user-specified constraints on minimum match length (*L*) and minimum panel occurrences (*k*). It is the first PBWT-based tool to support *kL*-SMEM queries — identifying shared haplotype segments of length ≥ *L* that occur in at least *k* panel haplotypes and cannot be extended without losing matches. This is particularly useful for identity-by-descent (IBD) segment analysis in large cohorts.
 
-## Highlights
+PBML adapts the BML (Boyer-Moore-Li) algorithm, originally proposed by T. Gagie for BWT-based text indexing, to the Positional Burrows-Wheeler Transform (PBWT). It operates on run-length encoded forward and reverse PBWTs, using LCP/LCS queries with Boyer-Moore skip logic to enumerate SMEMs efficiently. See the [paper](https://www.biorxiv.org/content/10.64898/2025.12.01.691644v1) for details.
 
-- **kL-SMEMs** — Find SMEMs of length ≥ *L* with at least *k* occurrences. Unique to PBML; competing tools are limited to L=1, can be very helpful in Identify-by-Descent (IBD) segment analysis.
+### Key properties
+
+- **kL-SMEMs** — SMEMs of length ≥ *L* with at least *k* occurrences. Unique to PBML; competing tools are limited to L=1.
 - **4.6× faster** than μ-PBWT, **2.4× faster** than Durbin's PBWT, using **1.3–25.6× less memory** (1KGP, single-threaded).
 - **O(r) index size** — Run-length compressed PBWTs scale with panel compressibility, not raw size.
 - **Parallel queries** — 8.2× speedup at 16 threads with near-constant memory overhead.
 
-## Quick Start
+## Installation
+
+### Dependencies
+
+- [htslib](https://github.com/samtools/htslib)
+- [SDSL](https://github.com/simongog/sdsl-lite)
+
+### Building from source
 
 ```bash
 git clone https://github.com/uwaiseibna/PBML.git
 cd PBML && mkdir build && cd build
 cmake .. && make -j
-./pbml run -p panel.bcf -q query.bcf -L 5 -k 1 -o smems.tsv
 ```
 
-Requires [htslib](https://github.com/samtools/htslib) and [SDSL](https://github.com/simongog/sdsl-lite). Input files must be `.bcf` or `.vcf`.
+Input files must be `.bcf` or `.vcf`.
 
-## Performance
+## Quick start
 
-Median across chromosomes 1–22 on 1000 Genomes Project Phase 3 (4,008 panel haplotypes, 1,000 queries, L=1, single-threaded). Build and query times normalized per million variant sites.
-
-| Method | Build (s/M sites) | Query (s/M sites) | Peak Memory (GB) |
-|--------|:-:|:-:|:-:|
-| **PBML** | 45.19 (43.86–46.12) | **49.08** (44.86–67.42) | **6.4** (2.4–12.4) |
-| [μ-PBWT](https://github.com/dlcgold/muPBWT) | 63.76 (62.72–65.88) | 233.90 (200.48–276.75) | 9.1 (2.8–17.4) |
-| [Dynamic μ-PBWT](https://github.com/ucfcbb/Dynamic-mu-PBWT) | 212.45 (203.46–351.44) | 582.28 (485.38–756.82) | 24.2 (9.4–46.0) |
-| [PBWT](https://github.com/richarddurbin/pbwt) | **20.20** (14.95–20.60) | 121.75 (113.36–135.03) | 176.2 (52.3–336.2) |
-
-Values are median (min–max). All methods report identical SMEM sets. With 16 threads, PBML achieves an 8.2× query speedup with <1% memory increase, while μ-PBWT sees 15.9% memory growth for a 2.4× speedup.
+```bash
+./pbml run -p panel.bcf -q query.bcf -L 5 -k 1 -o smems.tsv
+```
 
 ## Usage
 
@@ -65,17 +66,17 @@ Values are median (min–max). All methods report identical SMEM sets. With 16 t
 
 ```bash
 # Build index once, query many times
-./pbml index -p panel.bcf -i panel.pbml
-./pbml query -i panel.pbml -q query.bcf -L 10 -k 2 -o smems.tsv
+./pbml index  -p panel.bcf -i panel.pbml
+./pbml query  -i panel.pbml -q query.bcf
 
 # One-shot build + query
-./pbml run -p panel.bcf -q query.bcf -L 5 -k 1
+./pbml run -p panel.bcf -q query.bcf
 
-# Single-threaded
-OMP_NUM_THREADS=1 ./pbml run -p panel.bcf -q query.bcf -L 5
+# Multi-threaded
+OMP_NUM_THREADS=8 ./pbml run -p panel.bcf -q query.bcf -L 5
 ```
 
-## Output Format
+## Output format
 
 Tab-separated, one line per (query, panel haplotype, SMEM) triple:
 
@@ -83,20 +84,29 @@ Tab-separated, one line per (query, panel haplotype, SMEM) triple:
 query_id    panel_haplotype    start_site    end_site    length
 ```
 
-## Implementations
+## Implementation variants
 
-Two variants are provided in `src/`, both producing identical output:
+Two binaries are provided in `src/`, both producing identical output:
 
 | Binary | Haplotype recovery | Best for |
 |--------|-------------------|----------|
-| `pbml` (default) | φ-based lookups during querying | Multi-threaded workloads, large panels (≥5K haplotypes) |
+| `pbml` (default) | φ-based lookups during querying | Multi-threaded workloads, large panels (≥ 5K haplotypes) |
 | `pbmlRecon` | Sequential prefix array replay after querying | Single-threaded on small panels, lowest memory |
 
 `pbml` resolves haplotype IDs independently per query via constant-time φ operations, so all queries run fully in parallel. `pbmlRecon` eliminates the φ/successor structures for a smaller index and faster construction, but its sequential O(w×h) reconstruction pass limits parallel scalability and becomes a bottleneck as panel size grows.
 
-## How It Works
+## Benchmarks
 
-PBML adapts the BML (Boyer-Moore-Li) algorithm originally proposed by T. Gagie for BWT; to the PBWT framework. It builds forward and reverse run-length encoded PBWTs and uses LCP/LCS queries with Boyer-Moore skip logic to enumerate SMEMs efficiently. See the [paper](https://www.biorxiv.org/content/10.64898/2025.12.01.691644v1) for details.
+Median across chromosomes 1–22 on 1000 Genomes Project Phase 3 (4,008 panel haplotypes, 1,000 queries, L=1, single-threaded). Build and query times normalized per million variant sites.
+
+| Method | Build (s/M sites) | Query (s/M sites) | Peak Memory (GB) |
+|--------|:-:|:-:|:-:|
+| **PBML** | 45.19 (43.86–46.12) | **49.08** (44.86–67.42) | **6.4** (2.4–12.4) |
+| [μ-PBWT](https://github.com/dlcgold/muPBWT) | 63.76 (62.72–65.88) | 233.90 (200.48–276.75) | 9.1 (2.8–17.4) |
+| [Dynamic μ-PBWT](https://github.com/ucfcbb/Dynamic-mu-PBWT) | 212.45 (203.46–351.44) | 582.28 (485.38–756.82) | 24.2 (9.4–46.0) |
+| [PBWT](https://github.com/richarddurbin/pbwt) | **20.20** (14.95–20.60) | 121.75 (113.36–135.03) | 176.2 (52.3–336.2) |
+
+Values are median (min–max). All methods report identical SMEM sets. With 16 threads, PBML achieves an 8.2× query speedup with < 1% memory increase, while μ-PBWT sees 15.9% memory growth for a 2.4× speedup.
 
 ## Citation
 

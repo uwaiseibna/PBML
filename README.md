@@ -6,7 +6,7 @@ PBML finds all haplotype segments in a query that match at least *k* panel haplo
 
 ## Highlights
 
-- **kL-SMEMs** — Find SMEMs of length ≥ *L* with at least *k* occurrences. Unique to PBML; competing tools are limited to L=1.
+- **kL-SMEMs** — Find SMEMs of length ≥ *L* with at least *k* occurrences. Unique to PBML; competing tools are limited to L=1, can be very helpful in Identify-by-Descent (IBD) segment analysis.
 - **4.6× faster** than μ-PBWT, **2.4× faster** than Durbin's PBWT, using **1.3–25.6× less memory** (1KGP, single-threaded).
 - **O(r) index size** — Run-length compressed PBWTs scale with panel compressibility, not raw size.
 - **Parallel queries** — 8.2× speedup at 16 threads with near-constant memory overhead.

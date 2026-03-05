@@ -17,7 +17,7 @@ traversed again and again.
 
 PBML uses a two-phase query strategy:
   Phase 1: Run BML for all queries in parallel, collecting SMEM descriptors (intervals + positions)
-           without resolving haplotype IDs. Only the RLE structures (~80MB) are needed.
+           without resolving haplotype IDs. Only the RLE structures are needed.
   Phase 2: Single left-to-right reconstruction pass over the forward PBWT, replaying the prefix
            array column-by-column. At each column where an SMEM ends, read off the haplotype IDs
            directly from the current permutation. Cost: O(N × M) total, amortized across all queries.

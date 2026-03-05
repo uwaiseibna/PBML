@@ -2,7 +2,7 @@
 
 **Fast, memory-efficient enumeration of set-maximal exact matches (SMEMs) from query haplotypes against a reference panel.**
 
-PBML finds all haplotype segments in a query that match at least *k* panel haplotypes and cannot be extended without losing matches (SMEMs) — with a configurable minimum length *L*. No other PBWT-based tool supports minimum-length SMEM constraints (*kL*-SMEMs).
+PBML finds all haplotype segments in a query that match at least *k* panel haplotypes and minimum match length *L* and cannot be extended without losing matches (SMEMs). No other PBWT-based tool supports minimum-length SMEM constraints (*kL*-SMEMs).
 
 ## Highlights
 
@@ -89,14 +89,14 @@ Two variants are provided in `src/`, both producing identical output:
 
 | Binary | Haplotype recovery | Best for |
 |--------|-------------------|----------|
-| `pbml` | φ-based lookups during querying | Multi-threaded workloads, large panels (≥5K haplotypes) |
+| `pbml` (default) | φ-based lookups during querying | Multi-threaded workloads, large panels (≥5K haplotypes) |
 | `pbmlRecon` | Sequential prefix array replay after querying | Single-threaded on small panels, lowest memory |
 
 `pbml` resolves haplotype IDs independently per query via constant-time φ operations, so all queries run fully in parallel. `pbmlRecon` eliminates the φ/successor structures for a smaller index and faster construction, but its sequential O(w×h) reconstruction pass limits parallel scalability and becomes a bottleneck as panel size grows.
 
 ## How It Works
 
-PBML adapts the BML (Boyer-Moore-Li) algorithm — originally proposed by T. Gagie for BWT — to the PBWT framework. It builds forward and reverse run-length encoded PBWTs and uses LCP/LCS queries with Boyer-Moore skip logic to enumerate SMEMs efficiently. See the [paper](https://www.biorxiv.org/content/10.64898/2025.12.01.691644v1) for details.
+PBML adapts the BML (Boyer-Moore-Li) algorithm originally proposed by T. Gagie for BWT; to the PBWT framework. It builds forward and reverse run-length encoded PBWTs and uses LCP/LCS queries with Boyer-Moore skip logic to enumerate SMEMs efficiently. See the [paper](https://www.biorxiv.org/content/10.64898/2025.12.01.691644v1) for details.
 
 ## Citation
 

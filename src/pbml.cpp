@@ -2,7 +2,7 @@
 ===============
 Intro
 ===============
-This is the implementation of PBML (Positional Boyer-Moore-Li): A method to enumerate SMEMs from external 
+This is the implementation of PBML (Positional Boyer-Moore-Li): A method to enumerate SMEMs (Set Maximal Exact Matches) from external 
 query haplotypes against a reference haplotype panel represented as PBWT using Li's forward-backward 
 algorithm combined with Boyer-Moore skip logic, originally proposed by T. Gagie as BML (Boyer-Moore-Li) for BWT,
 here adapted to PBWT. For forward-backward; PBML uses longest common prefix (LCP) for forward and longest common 
@@ -12,18 +12,15 @@ built right-to-left. Both are stored using RLE (run-length encoded) data structu
 on the forward PBWT (extending right) and LCS queries on the reverse PBWT (extending left) to do forward-backward 
 using rank queries for interval tracking. Boyer-Moore skipping logic is applied to ensure a site is not
 traversed again and again.
-Since, PBML has a space complexity of O(R), R being the number of runs in a PBWT,
-we use φ (phi) operations to recover prefix array indices of SMEMs from the run-length encoded structures.
+PBML has a space complexity of O(R), R being the number of runs in a PBWT.
+We use φ (phi) operations to recover prefix array indices of SMEMs from the run-length encoded structures.
 The phi_with_hint mechanism is inspired by the MOVI architecture (Zakeri et al.):
     https://www.cell.com/iscience/fulltext/S2589-0042(24)02691-9
 which builds on the Move structure by Nishimoto and Tabei:
     https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.ICALP.2021.101
 PBML Features:
-  - Finds all SMEMs of variable minimum length L against a reference panel
-  - Supports k-SMEMs: matches occurring at least k times in the panel
-  - Index serialization for fast repeated queries
-  - Automatic type selection: uint16_t for panels ≤65,535 haplotypes,
-    uint32_t for larger panels
+  - Supports *kL*-SMEMs: SMEMs of minimum length *L* occurring at least *k* times in the panel, key in IBD analysis.
+  - Index serialization for fast repeated queries, single index can support all query parameterization.
 All persistent data structures are RLE-compressed. The temporary all_columns array (used during construction
 to build the reverse PBWT from memory) is freed after construction and not required for querying.
 ================================================================================
@@ -101,7 +98,7 @@ struct CLIOptions {
     bool help = false;                       // -h, --help
 };
 void printUsage(const char* progname) {
-    std::cerr << "PBML - Positional Boyer-Moore-Li for SMEM finding\n\n"
+    std::cerr << "PBML - Positional Boyer-Moore-Li for kL-SMEM finding\n\n"
               << "Usage: " << progname << " <mode> [options]\n\n"
               << "Modes:\n"
               << "  index    Build and save index from panel\n"
@@ -113,7 +110,7 @@ void printUsage(const char* progname) {
               << "  -i, --index <file>     Index file (query: input, index: output)\n"
               << "  -o, --output <file>    Output file [default: smems.tsv]\n"
               << "  -L, --length <int>     Minimum SMEM length [default: 1]\n"
-              << "  -k, --min-occ <int>    Minimum occurrences [default: 1]\n"
+              << "  -k, --min-occ <int>    Minimum SMEM occurrences in panel [default: 1]\n"
               << "  -t, --threads <int>    Number of threads [default: all]\n"
               << "  -v, --verbose          Verbose output\n"
               << "  -h, --help             Show this help\n\n"

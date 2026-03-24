@@ -84,17 +84,6 @@ Tab-separated, one line per (query, panel haplotype, SMEM) triple:
 query_id    panel_haplotype    start_site    end_site    length
 ```
 
-## Implementation variants
-
-Two binaries are provided in `src/`, both producing identical output:
-
-| Binary | Haplotype recovery | Best for |
-|--------|-------------------|----------|
-| `pbml` (default) | φ-based lookups during querying | Multi-threaded workloads, large panels (≥ 5K haplotypes) |
-| `pbmlRecon` | Sequential prefix array replay after querying | Single-threaded on small panels, lowest memory |
-
-`pbml` resolves haplotype IDs independently per query via constant-time φ operations, so all queries run fully in parallel. `pbmlRecon` eliminates the φ/successor structures for a smaller index and faster construction, but its sequential O(w×h) reconstruction pass limits parallel scalability and becomes a bottleneck as panel size grows.
-
 ## Benchmarks
 
 Median across chromosomes 1–22 on 1000 Genomes Project Phase 3 (4,008 panel haplotypes, 1,000 queries, *k*=1, *L*=1, single-threaded). Build and query times normalized per million variant sites.

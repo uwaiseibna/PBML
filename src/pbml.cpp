@@ -252,19 +252,18 @@ public:
 private:
     // RLE structures for forward PBWT
     std::unique_ptr<HapT[]> runLens_fwd;
-    std::unique_ptr<char[]> startBits_fwd;
+    sdsl::bit_vector startBits_fwd;
     std::unique_ptr<uint32_t[]> colPtrs_fwd;
-    std::unique_ptr<HapT[]> colCs_fwd;
     size_t total_runs_fwd;
 
     // RLE structures for reverse PBWT
     std::unique_ptr<HapT[]> runLens_rev;
-    std::unique_ptr<char[]> startBits_rev;
+    sdsl::bit_vector startBits_rev;
     std::unique_ptr<uint32_t[]> colPtrs_rev;
-    std::unique_ptr<HapT[]> colCs_rev;
     size_t total_runs_rev;
 
     // Essential structures
+    std::unique_ptr<HapT[]> colCs;
     size_t n_sites;
     size_t n_haplotypes;
     std::vector<sdsl::bit_vector> queries;
@@ -341,11 +340,10 @@ public:
                                      std::to_string(std::numeric_limits<HapT>::max()));
         end_prefs = std::make_unique<HapT[]>(n_sites);
         colPtrs_fwd = std::make_unique<uint32_t[]>(n_sites + 2);
-        colCs_fwd = std::make_unique<HapT[]>(n_sites);
-        startBits_fwd = std::make_unique<char[]>(n_sites);
+        colCs = std::make_unique<HapT[]>(n_sites);
+        startBits_fwd = sdsl::bit_vector(n_sites, 0);
         colPtrs_rev = std::make_unique<uint32_t[]>(n_sites + 2);
-        colCs_rev = std::make_unique<HapT[]>(n_sites);
-        startBits_rev = std::make_unique<char[]>(n_sites);
+        startBits_rev = sdsl::bit_vector(n_sites, 0);
         buildForwardPBWT();
         buildReversePBWT();
         all_columns.clear();
@@ -537,14 +535,13 @@ public:
         out.write(reinterpret_cast<const char*>(&total_successors), sizeof(total_successors));
         // Forward PBWT
         out.write(reinterpret_cast<const char*>(runLens_fwd.get()), total_runs_fwd * sizeof(HapT));
-        out.write(reinterpret_cast<const char*>(startBits_fwd.get()), n_sites * sizeof(char));
+        sdsl::serialize(startBits_fwd, out);
         out.write(reinterpret_cast<const char*>(colPtrs_fwd.get()), (n_sites + 2) * sizeof(uint32_t));
-        out.write(reinterpret_cast<const char*>(colCs_fwd.get()), n_sites * sizeof(HapT));
+        out.write(reinterpret_cast<const char*>(colCs.get()), n_sites * sizeof(HapT));
         // Reverse PBWT
         out.write(reinterpret_cast<const char*>(runLens_rev.get()), total_runs_rev * sizeof(HapT));
-        out.write(reinterpret_cast<const char*>(startBits_rev.get()), n_sites * sizeof(char));
+        sdsl::serialize(startBits_rev, out);
         out.write(reinterpret_cast<const char*>(colPtrs_rev.get()), (n_sites + 2) * sizeof(uint32_t));
-        out.write(reinterpret_cast<const char*>(colCs_rev.get()), n_sites * sizeof(HapT));
         // Phi structures
         out.write(reinterpret_cast<const char*>(run_begin_positions.get()), total_runs_fwd * sizeof(HapT));
         // Write PhiInfo field by field to avoid struct padding issues
@@ -596,26 +593,22 @@ public:
         in.read(reinterpret_cast<char*>(&total_successors), sizeof(total_successors));
         // Allocate arrays
         runLens_fwd = std::make_unique<HapT[]>(total_runs_fwd);
-        startBits_fwd = std::make_unique<char[]>(n_sites);
         colPtrs_fwd = std::make_unique<uint32_t[]>(n_sites + 2);
-        colCs_fwd = std::make_unique<HapT[]>(n_sites);
+        colCs = std::make_unique<HapT[]>(n_sites);
         runLens_rev = std::make_unique<HapT[]>(total_runs_rev);
-        startBits_rev = std::make_unique<char[]>(n_sites);
         colPtrs_rev = std::make_unique<uint32_t[]>(n_sites + 2);
-        colCs_rev = std::make_unique<HapT[]>(n_sites);
         run_begin_positions = std::make_unique<HapT[]>(total_runs_fwd);
         run_phi_info = std::make_unique<PhiInfo[]>(total_runs_fwd);
         end_prefs = std::make_unique<HapT[]>(n_sites);
         // Forward PBWT
         in.read(reinterpret_cast<char*>(runLens_fwd.get()), total_runs_fwd * sizeof(HapT));
-        in.read(reinterpret_cast<char*>(startBits_fwd.get()), n_sites * sizeof(char));
+        sdsl::load(startBits_fwd, in);
         in.read(reinterpret_cast<char*>(colPtrs_fwd.get()), (n_sites + 2) * sizeof(uint32_t));
-        in.read(reinterpret_cast<char*>(colCs_fwd.get()), n_sites * sizeof(HapT));
+        in.read(reinterpret_cast<char*>(colCs.get()), n_sites * sizeof(HapT));
         // Reverse PBWT
         in.read(reinterpret_cast<char*>(runLens_rev.get()), total_runs_rev * sizeof(HapT));
-        in.read(reinterpret_cast<char*>(startBits_rev.get()), n_sites * sizeof(char));
+        sdsl::load(startBits_rev, in);
         in.read(reinterpret_cast<char*>(colPtrs_rev.get()), (n_sites + 2) * sizeof(uint32_t));
-        in.read(reinterpret_cast<char*>(colCs_rev.get()), n_sites * sizeof(HapT));
         // Phi structures
         in.read(reinterpret_cast<char*>(run_begin_positions.get()), total_runs_fwd * sizeof(HapT));
         for (size_t i = 0; i < total_runs_fwd; ++i) {
@@ -687,8 +680,8 @@ private:
                 zero_count += (val == 0);
             }
 
-            startBits_fwd[site_idx] = pbwt_column[0];
-            colCs_fwd[site_idx] = zero_count;
+            startBits_fwd[site_idx] = (pbwt_column[0] != 0);
+            colCs[site_idx] = zero_count;
 
             successor_counts[pref[0]]++;
             char current_bit = pbwt_column[0];
@@ -911,17 +904,13 @@ private:
                 size_t site_idx = static_cast<size_t>(i);
                 const sdsl::bit_vector &original_column = all_columns[site_idx];
 
-                HapT zero_count = 0;
                 for (size_t j = 0; j < n_haplotypes; ++j)
                 {
                     char val = original_column[pref[j]] ? 1 : 0;
                     pbwt_column[j] = val;
-                    zero_count += (val == 0);
                 }
 
-                startBits_rev[site_idx] = pbwt_column[0];
-                colCs_rev[site_idx] = zero_count;
-
+                startBits_rev[site_idx] = (pbwt_column[0] != 0);
                 uint32_t col_runs = 0;
                 char current_bit = pbwt_column[0];
                 HapT run_len = 1;
@@ -1064,7 +1053,7 @@ private:
         if (i_end >= static_cast<int>(n_haplotypes))
             i_end = static_cast<int>(n_haplotypes) - 1;
         long runLensSum = 0;
-        char runBit = startBits_fwd[j];
+        int runBit = static_cast<int>(startBits_fwd[j]);
         long p = static_cast<long>(colPtrs_fwd[j]);
         long p_end = static_cast<long>(colPtrs_fwd[j + 1]);
         int rank = 0;
@@ -1109,7 +1098,7 @@ private:
         if (i_end >= static_cast<int>(n_haplotypes))
             i_end = static_cast<int>(n_haplotypes) - 1;
         long runLensSum = 0;
-        char runBit = startBits_rev[j];
+        int runBit = static_cast<int>(startBits_rev[j]);
         long p = static_cast<long>(colPtrs_rev[j]);
         long p_end = static_cast<long>(colPtrs_rev[j + 1]);
         int rank = 0;
@@ -1228,8 +1217,8 @@ private:
             }
             else
             {
-                new_start = colCs_rev[query_pos] + rank_start;
-                new_end = colCs_rev[query_pos] + rank_end;
+                new_start = colCs[query_pos] + rank_start;
+                new_end = colCs[query_pos] + rank_end;
             }
             if (new_start + k > new_end)
                 break;
@@ -1268,8 +1257,8 @@ private:
             }
             else
             {
-                new_start = colCs_fwd[current_col] + rank_start;
-                new_end = colCs_fwd[current_col] + rank_end;
+                new_start = colCs[current_col] + rank_start;
+                new_end = colCs[current_col] + rank_end;
             }
             if (new_start + k > new_end)
                 break;
@@ -1342,7 +1331,7 @@ private:
                 for (size_t idx = 0; idx < original_indices.size(); ++idx)
                 {
                     HapT original_row = original_indices[idx];
-                    int len = std::snprintf(buffer, sizeof(buffer), "%zu\t%u\t%d\t%d\t%d\n",
+              int len = std::snprintf(buffer, sizeof(buffer), "%zu\t%u\t%d\t%d\t%d\n",
                                             query_index, static_cast<unsigned>(original_row),
                                             smem_start, smem_end, smem_length);
                     if (len > 0)
